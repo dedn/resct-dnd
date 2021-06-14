@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, {useRef, useState} from 'react';
 import './App.css';
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 
-const MovableItem = ({name, setItems}) => {
+const MovableItem = ({name, index, currentColumnName, moveCardHandler, setItems}) => {
 
     const changeItemColumn =(currentItem, columnName)=> {
         setItems((prevState)=>{
@@ -16,8 +16,50 @@ const MovableItem = ({name, setItems}) => {
         })
     }
 
+    const ref = useRef(null)
+    const [, drop] = useDrop({
+        accept: 'Our first type',
+        hover(item, monitor) {
+            if (!ref.current) {
+                return;
+            }
+            const dragIndex = item.index;
+            const hoverIndex = index;
+            // Don't replace items with themselves
+            if (dragIndex === hoverIndex) {
+                return;
+            }
+            // Determine rectangle on screen
+            const hoverBoundingRect = ref.current?.getBoundingClientRect();
+            // Get vertical middle
+            const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
+            // Determine mouse position
+            const clientOffset = monitor.getClientOffset();
+            // Get pixels to the top
+            const hoverClientY = clientOffset.y - hoverBoundingRect.top;
+            // Only perform the move when the mouse has crossed half of the items height
+            // When dragging downwards, only move when the cursor is below 50%
+            // When dragging upwards, only move when the cursor is above 50%
+            // Dragging downwards
+            if (dragIndex < hoverIndex && hoverClientY < hoverMiddleY) {
+                return;
+            }
+            // Dragging upwards
+            if (dragIndex > hoverIndex && hoverClientY > hoverMiddleY) {
+                return;
+            }
+            // Time to actually perform the action
+            moveCardHandler(dragIndex, hoverIndex);
+            // Note: we're mutating the monitor item here!
+            // Generally it's better to avoid mutations,
+            // but it's good here for the sake of performance
+            // to avoid expensive index searches.
+            item.index = hoverIndex;
+        },
+    });
+
     const [{isDragging}, drag] = useDrag({
-        item: {name},
+        item: {index, name},
         type: 'Our first type',
         end: (item, monitor) => {
             const dropResult = monitor.getDropResult();
@@ -33,9 +75,9 @@ const MovableItem = ({name, setItems}) => {
     });
 
     const opacity = isDragging ? 0.4 : 1;
-
+      drag(drop(ref))
     return (
-        <div ref={drag} className='movable-item' style={{opacity}}>
+        <div ref={ref} className='movable-item' style={{opacity}}>
             {name}
         </div>
     )
@@ -64,15 +106,33 @@ export const App = () => {
 
     ])
 
+    const moveCardHandler = (dragIndex, hoverIndex) => {
+        const dragItem = items[dragIndex];
+
+        if (dragItem) {
+            setItems((prevState => {
+                const coppiedStateArray = [...prevState];
+
+                // remove item by "hoverIndex" and put "dragItem" instead
+                const prevItem = coppiedStateArray.splice(hoverIndex, 1, dragItem);
+
+                // remove item by "dragIndex" and put "prevItem" instead
+                coppiedStateArray.splice(dragIndex, 1, prevItem[0]);
+
+                return coppiedStateArray;
+            }));
+        }
+    };
+
     const returnItemsForColumn = (columnName) => {
         return items.filter((item)=> {
-          return   item.column === columnName
-        }).map((item)=> {
-         return  <MovableItem keu={item.id} name={item.name} setItems={setItems}/>
+          return  item.column === columnName
+        }).map((item, index)=> {
+         return  <MovableItem keu={item.id} name={item.name} setItems={setItems} index={index} moveCardHandler={moveCardHandler}/>
         })
     }
     // const [isFirstColumn, setIsFirstColumn] = useState(true);
-    //
+    //f
     // const Item = <MovableItem setIsFirstColumn={setIsFirstColumn}/>;
 
     return (
